@@ -1,12 +1,17 @@
 from __future__ import annotations
 
+import math
 import random
 
 import pygame
 
 from ms_rehab_game.games.base_game import RehabGameBase
-from ms_rehab_game.settings import BG_CARD, CYAN, GAME_COLORS, TOWER_CONFIG, WHITE
+from ms_rehab_game.settings import BG_CARD, CYAN, GAME_COLORS, SCREEN_HEIGHT, SCREEN_WIDTH, TOWER_CONFIG, WHITE
 from ms_rehab_game.ui.components import draw_text
+
+# Webcam capture resolution used in gesture_detector
+_WEBCAM_W = 640
+_WEBCAM_H = 480
 
 
 class MindfulTowerGame(RehabGameBase):
@@ -18,6 +23,9 @@ class MindfulTowerGame(RehabGameBase):
         self.placed: dict[int, int] = {}
         self.dragging_block: dict | None = None
         self.was_pinching = False
+        # hand_cursor_pos / hand_cursor_pinching live in RehabGameBase
+        # Disable swipe-to-pause; only the hand-clickable ⏸ PAUSE button is used
+        self._swipe_pause_enabled = False
 
     def reset_game_state(self) -> None:
         config = TOWER_CONFIG[self.level]
@@ -39,7 +47,7 @@ class MindfulTowerGame(RehabGameBase):
 
     def _build_markers(self, config: dict) -> list[dict]:
         markers = []
-        base_x = 800
+        base_x = 550
         base_y = 520
         for idx in range(config["count"]):
             col = idx % config["cols"]
@@ -85,23 +93,37 @@ class MindfulTowerGame(RehabGameBase):
 
     def update(self, dt, gesture_data) -> None:
         super().update(dt, gesture_data)
+        # Always update hand cursor so buttons remain clickable even when paused
+        hand = gesture_data.controlling_hand
+        if hand:
+            self.hand_cursor_pos = self._map_cursor_to_screen(hand["pinch"]["position"])
+            self.hand_cursor_pinching = hand["pinch"]["pinching"]
+        else:
+            self.hand_cursor_pos = None
+            self.hand_cursor_pinching = False
         if self.game_over or self.is_paused:
             return
         if self.preview_timer > 0:
             self.preview_timer = max(0.0, self.preview_timer - dt)
         if self.settings["cognitive_mode"] == "memory" and gesture_data.secondary_hand_hint:
             self.trigger_hint(3.0)
-        self._handle_drag(gesture_data)
+        self._handle_drag()
         if len(self.placed) == len(self.markers):
             self.end_game()
 
-    def _handle_drag(self, gesture_data) -> None:
-        hand = gesture_data.controlling_hand
-        if not hand:
+    def _map_cursor_to_screen(self, webcam_pos: tuple[int, int]) -> tuple[int, int]:
+        """Map webcam-space coordinates to screen-space coordinates."""
+        screen_w, screen_h = self.manager.screen.get_size()
+        sx = int(webcam_pos[0] * screen_w / _WEBCAM_W)
+        sy = int(webcam_pos[1] * screen_h / _WEBCAM_H)
+        return (sx, sy)
+
+    def _handle_drag(self) -> None:
+        """Drag-and-drop logic using the already-mapped hand cursor position."""
+        cursor = self.hand_cursor_pos
+        if cursor is None:
             return
-        pinch = hand["pinch"]
-        cursor = pinch["position"]
-        pinching = pinch["pinching"]
+        pinching = self.hand_cursor_pinching
         if pinching and not self.was_pinching and self.dragging_block is None:
             for block in reversed(self.source_blocks):
                 if block["id"] in self.placed.values():
@@ -145,12 +167,15 @@ class MindfulTowerGame(RehabGameBase):
             self.draw_pause_overlay(surface)
         if self.game_over:
             self.draw_finish_modal(surface)
+        # Draw hand cursor last so it is always on top of every overlay
+        if self.hand_cursor_pos:
+            self._draw_hand_cursor(surface, self.hand_cursor_pos, self.hand_cursor_pinching)
 
     def draw_playfield(self, surface: pygame.Surface) -> None:
         config = TOWER_CONFIG[self.level]
         draw_text(surface, f"Blocks: {len(self.placed)}/{len(self.markers)}", 26, WHITE, (30, 130), bold=True)
         source_area = pygame.Rect(40, 180, 360, 380)
-        tower_area = pygame.Rect(720, 160, 420, 420)
+        tower_area = pygame.Rect(480, 160, 420, 420)
         pygame.draw.rect(surface, BG_CARD, source_area, border_radius=12)
         pygame.draw.rect(surface, CYAN, source_area, width=2, border_radius=12)
         pygame.draw.rect(surface, BG_CARD, tower_area, border_radius=12)
@@ -160,7 +185,7 @@ class MindfulTowerGame(RehabGameBase):
         for marker in self.markers:
             pygame.draw.rect(surface, (90, 90, 90), marker["rect"], width=2, border_radius=6)
         show_target = self.settings["cognitive_mode"] == "pinch_precision" or self.preview_timer > 0 or self.hint_timer > 0
-        preview_rect = pygame.Rect(1030, 70, 200, 120)
+        preview_rect = pygame.Rect(920, 70, 200, 120)
         pygame.draw.rect(surface, BG_CARD, preview_rect, border_radius=10)
         pygame.draw.rect(surface, CYAN, preview_rect, width=2, border_radius=10)
         draw_text(surface, "Target", 20, WHITE, (preview_rect.centerx, preview_rect.y + 10), center=True, bold=True)
@@ -184,3 +209,66 @@ class MindfulTowerGame(RehabGameBase):
             if block:
                 pygame.draw.rect(surface, GAME_COLORS[block["color_index"]], marker["rect"], border_radius=8)
                 pygame.draw.rect(surface, WHITE, marker["rect"], width=2, border_radius=8)
+
+    def _draw_hand_cursor(self, surface: pygame.Surface, pos: tuple[int, int], pinching: bool) -> None:
+        """Draw a human-hand-shaped pointer cursor at *pos*.
+
+        Open hand when hovering, closed/grabbing hand when pinching.
+        """
+        cx, cy = pos
+        # Cursor scale (design size ≈ 36 px tall)
+        s = 1.0
+
+        if pinching:
+            # ── Closed / grabbing hand ──
+            # Palm (slightly smaller to suggest a fist)
+            palm_rect = pygame.Rect(int(cx - 10 * s), int(cy - 4 * s), int(20 * s), int(18 * s))
+            pygame.draw.ellipse(surface, (255, 220, 185), palm_rect)
+            pygame.draw.ellipse(surface, (200, 160, 130), palm_rect, 2)
+            # Curled fingers (small arcs across the top of the palm)
+            for i in range(4):
+                fx = int(cx - 9 * s + i * 6 * s)
+                fy = int(cy - 8 * s)
+                finger_rect = pygame.Rect(fx, fy, int(6 * s), int(10 * s))
+                pygame.draw.ellipse(surface, (255, 210, 175), finger_rect)
+                pygame.draw.ellipse(surface, (200, 160, 130), finger_rect, 2)
+            # Thumb (tucked to the side)
+            thumb_pts = [
+                (int(cx - 12 * s), int(cy + 2 * s)),
+                (int(cx - 16 * s), int(cy - 2 * s)),
+                (int(cx - 13 * s), int(cy - 6 * s)),
+                (int(cx - 9 * s),  int(cy - 2 * s)),
+            ]
+            pygame.draw.polygon(surface, (255, 210, 175), thumb_pts)
+            pygame.draw.polygon(surface, (200, 160, 130), thumb_pts, 2)
+        else:
+            # ── Open hand (pointer) ──
+            # Palm
+            palm_rect = pygame.Rect(int(cx - 11 * s), int(cy + 2 * s), int(22 * s), int(20 * s))
+            pygame.draw.ellipse(surface, (255, 220, 185), palm_rect)
+            pygame.draw.ellipse(surface, (200, 160, 130), palm_rect, 2)
+            # Five fingers
+            finger_data = [
+                # (offset_x, offset_y, width, height) relative to cx, cy
+                (-8, -18, 5, 20),   # index
+                (-2, -20, 5, 22),   # middle
+                ( 4, -18, 5, 20),   # ring
+                (10, -14, 5, 16),   # little
+            ]
+            for ox, oy, fw, fh in finger_data:
+                frect = pygame.Rect(int(cx + ox * s), int(cy + oy * s), int(fw * s), int(fh * s))
+                pygame.draw.ellipse(surface, (255, 218, 180), frect)
+                pygame.draw.ellipse(surface, (200, 160, 130), frect, 2)
+            # Thumb (angled outward)
+            thumb_pts = [
+                (int(cx - 13 * s), int(cy + 6 * s)),
+                (int(cx - 20 * s), int(cy - 4 * s)),
+                (int(cx - 16 * s), int(cy - 8 * s)),
+                (int(cx - 10 * s), int(cy + 0 * s)),
+            ]
+            pygame.draw.polygon(surface, (255, 218, 180), thumb_pts)
+            pygame.draw.polygon(surface, (200, 160, 130), thumb_pts, 2)
+
+        # Small dot at the exact cursor point for precision feedback
+        pygame.draw.circle(surface, CYAN, pos, 4)
+        pygame.draw.circle(surface, WHITE, pos, 4, 1)

@@ -36,8 +36,10 @@ class Button:
         if self.enabled and event.type == pygame.MOUSEBUTTONDOWN and event.button == 1 and self.rect.collidepoint(event.pos):
             self.callback()
 
-    def draw(self, surface: pygame.Surface) -> None:
-        hovered = self.enabled and self.rect.collidepoint(pygame.mouse.get_pos())
+    def draw(self, surface: pygame.Surface, hand_pos: tuple[int, int] | None = None) -> None:
+        mouse_hover = self.enabled and self.rect.collidepoint(pygame.mouse.get_pos())
+        hand_hover = self.enabled and hand_pos is not None and self.rect.collidepoint(hand_pos)
+        hovered = mouse_hover or hand_hover
         fill = self.accent if hovered else BG_CARD
         border = tuple(min(255, value + 50) for value in self.accent) if hovered else self.accent
         if not self.enabled:

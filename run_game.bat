@@ -15,7 +15,7 @@ if not exist ".venv\Scripts\python.exe" (
 
 echo Installing required packages...
 ".venv\Scripts\python.exe" -m pip install --upgrade pip
-".venv\Scripts\python.exe" -m pip install pygame opencv-python mediapipe matplotlib pandas bcrypt openpyxl
+".venv\Scripts\python.exe" -m pip install pygame-ce opencv-python mediapipe matplotlib pandas bcrypt openpyxl
 if errorlevel 1 (
     echo Failed to install dependencies.
     pause
