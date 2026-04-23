@@ -79,7 +79,7 @@ A target color pattern is shown. The player pinches blocks from the source tray 
 
 ## Gameplay Demo
 
-
+<video src="https://github.com/user-attachments/assets/64a419e7-61b0-41b3-af9f-b4e11873f53f" controls="controls" style="max-width: 730px;"></video>
 
 ---
 
