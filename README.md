@@ -77,6 +77,12 @@ A target color pattern is shown. The player pinches blocks from the source tray 
 
 ---
 
+## Gameplay Demo
+
+
+
+---
+
 ## Tech Stack
 
 | Layer | Technology | Role |
