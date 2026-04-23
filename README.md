@@ -1,4 +1,4 @@
-# MS RehaGame
+# NeuroQuest
 
 <p align="center">
   <img src="https://img.shields.io/badge/Python-3.11+-blue?logo=python&logoColor=white"/>
@@ -34,7 +34,7 @@
 
 Multiple Sclerosis (MS) affects ~2.9 million people worldwide. It progressively impairs fine motor control of the hands and cognitive abilities including memory, attention, and processing speed. Traditional rehabilitation exercises are clinically effective but monotonous, leading to low adherence.
 
-**MS RehaGame** is a serious game designed to make rehabilitation enjoyable while remaining clinically grounded. It targets:
+**NeuroQuest** is a serious game designed to make rehabilitation enjoyable while remaining clinically grounded. It targets:
 
 - **Fine motor skills** — thumb opposition and precision pinch exercises, mirroring standard occupational therapy tasks.
 - **Cognitive training** — memory, attention, and reaction speed through game-mode variations.
